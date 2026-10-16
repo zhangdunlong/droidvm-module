@@ -1,0 +1,27 @@
+#!/sbin/sh
+# ============================================================
+# Magisk 模块安装入口（标准引导脚本）
+# 真正的安装逻辑在 customize.sh（由 install_module 调用）
+# ============================================================
+umask 022
+
+OUTFD=$2
+ZIPFILE=$3
+
+mount /data 2>/dev/null
+
+# 加载模块框架的 util_functions.sh（提供 install_module / ui_print / set_perm 等）
+UF=""
+for u in /data/adb/magisk/util_functions.sh \
+         /data/adb/ksu/bin/util_functions.sh \
+         /data/adb/ap/bin/util_functions.sh; do
+  [ -f "$u" ] && UF="$u" && break
+done
+
+[ -n "$UF" ] || abort "! 未找到 Magisk / KernelSU / APatch 环境"
+. "$UF"
+
+command -v install_module >/dev/null 2>&1 || abort "! install_module 不可用"
+
+install_module
+exit 0
