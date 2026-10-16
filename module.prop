@@ -1,0 +1,6 @@
+id=DroidVM
+name=DroidVM for Magisk
+version=v1.0.0
+versionCode=100
+author=zhangdunlong
+description=Run a full Debian 12 VM (QEMU/TCG) with Docker & 1Panel on any rooted Android phone. Boots automatically, managed via mgmt.sh.
