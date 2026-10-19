@@ -119,5 +119,7 @@ write_files:
       echo "DVMSETUP_DONE"
 
 runcmd:
+  # rootfs 不含 SSH 主机密钥（开源分发安全）：首先生成，再跑装配脚本
+  - [ ssh-keygen, -A ]
   - [ bash, /usr/local/sbin/dvm-setup.sh ]
   - [ sh, -c, "touch /var/lib/dvm-setup-finished" ]

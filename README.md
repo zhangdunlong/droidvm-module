@@ -58,12 +58,18 @@
 ```
 DroidVM/
 ├── module.prop                 # 模块元数据
-├── settings.conf               # 用户可改配置（内存/端口/凭据）
-├── customize.sh                # 刷入时执行（权限/环境准备）
+├── settings.conf               # 用户可改配置（内存/端口/凭据，安装时随机化）
+├── customize.sh                # 刷入时执行（权限/环境/随机凭据生成）
 ├── service.sh                  # 开机自启入口（晚于 boot_completed）
 ├── uninstall.sh               # 卸载清理
 ├── bin/
 │   └── mgmt.sh                 # 运行期管理脚本（start/stop/status/...）
+├── app/                        # 管理 App（DVM Lite）源码，见 app/README.md
+│   ├── AndroidManifest.xml
+│   ├── build.py                # 一条命令构建签名 APK
+│   ├── mgmt.sh                 # App 后端脚本（推到 /data/adb/dvm-lite/）
+│   ├── res/values/strings.xml
+│   └── src/com/dvm/lite/       # MainActivity / ContainerActivity / GrabActivity
 ├── vm/
 │   └── templates/
 │       ├── user-data           # cloud-init 模板（脱敏，凭据占位符）
@@ -83,12 +89,14 @@ DroidVM/
 
 1. 到 [Releases](../../releases) 下载 `DroidVM-vX.Y.Z.zip`（含 rootfs 与磁盘模板）。
 2. Magisk → 模块 → 本地安装 → 选该 zip → 重启。
+   - **安装时 `customize.sh` 会为本机生成随机密码**（dvm/root/1Panel 三处），请从安装日志抄走。
 3. 重启后约 45 秒，模块自动 `start`：
    - 首次会解压 rootfs（1–2 分钟）、从模板建数据盘、生成 cloud-init seed（装配 10–20 分钟）。
-4. 浏览器打开 **`http://<手机局域网IP>:10086/droidvm_panel`** 即可用 1Panel。
-   SSH：`ssh -p 2222 dvm@<手机局域网IP>`
+4. 浏览器打开 **`http://<手机局域网IP>:10086/<安装日志里的随机入口>`** 即可用 1Panel。
+   SSH：`ssh -p 2222 dvm@<手机局域网IP>`（密码同安装日志）
 
-> 🔴 **首次启动后请立即登录修改密码！** 默认 `dvm` 用户与 1Panel 密码都在 `settings.conf` 里（已脱敏为占位值，但仍建议改）。
+> 🔴 **首次启动后请立即修改密码！** 随机密码在 `settings.conf` 里可改，改后 `mgmt.sh restart` 生效；
+> VM 内也可 `passwd` 修改。模块分发**不含任何默认密码**。
 
 ---
 
@@ -132,6 +140,39 @@ su -c 'sh /data/adb/modules/DroidVM/bin/mgmt.sh {start|stop|restart|status|ssh|d
 - **CPU**：TCG 软解，编译/压测时手机会明显发热；建议 `VM_SMP` 别拉满。
 - **青龙 OCR 等 aarch64 特例**：Alpine/Debian arm64 上 `onnxruntime` 等 wheel 不全，
   需用系统包（如 `apk add py3-onnxruntime`）或源码装，见青龙签到脚本注释。
+
+---
+
+## 管理 App（DVM Lite，随仓库开源）
+
+`app/` 目录是配套的安卓管理端，纯 Java 零依赖：
+
+| 功能 | 说明 |
+|---|---|
+| 服务管理 | agent2api 启停/重启、状态卡片（IP/内存/模块/服务） |
+| 面板直达 | agent2api 移动版 + 原版、青龙、mi-paiai，凭据弹窗可复制 |
+| 青龙抓取 | 内置 WebView 登录站点 → 一键抓 Cookie（含 HttpOnly）写入青龙 env |
+| 容器管理 | 经 SSH 远程控制另一台机器上的 Docker 容器（启/停/重启） |
+
+```bash
+cd app && python build.py    # 产物 build/dvm-lite.apk（JDK17 + SDK34）
+```
+
+详见 [app/README.md](./app/README.md)。**部署前需把源码里的占位符改成你的环境**（地址/凭据）。
+
+---
+
+## 安全与脱敏说明
+
+发布内容经过以下脱敏处理：
+
+| 项 | 处理 |
+|---|---|
+| SSH 主机密钥 | rootfs 内 `etc/ssh/ssh_host_*` 已删除；VM 首启由 cloud-init `ssh-keygen -A` 重建（`tools/fetch-assets.sh` 同步含此清理） |
+| 默认密码 | 无任何硬编码默认密码；`customize.sh` 安装时随机生成并回写 `settings.conf` |
+| 构建日志 | apt/dpkg 日志已从 rootfs 清除 |
+| App 凭据 | 源码内网地址/密码全部改为占位符 |
+| 数据资产 | qcow2 为 Debian 官方 cloud 镜像原版（未启动过，无个人数据） |
 
 ---
 

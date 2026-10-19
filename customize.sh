@@ -35,10 +35,24 @@ if [ "$FREE_MB" -lt 1536 ]; then
   abort "! 安装中止：存储空间不足"
 fi
 
-# ---- 默认凭据警告 ----
+# ---- 首次装配凭据：随机生成（避免公开默认密码） ----
+# busybox 环境：head/base64/tr 均可用；按字段名锚定回写 settings.conf
+gen_pass() {
+    head -c 16 /dev/urandom | base64 | tr -d '/+=' | head -c 16
+}
+GEN_DVM_PASS=$(gen_pass)
+GEN_PANEL_PASS=$(gen_pass)
+GEN_ENTRANCE=$(gen_pass | tr 'A-Z' 'a-z')
+sed -i "s|^DVM_PASSWORD=.*|DVM_PASSWORD='$GEN_DVM_PASS'|" "$MODDIR/settings.conf" 2>/dev/null
+sed -i "s|^PANEL_PASSWORD=.*|PANEL_PASSWORD='$GEN_PANEL_PASS'|" "$MODDIR/settings.conf" 2>/dev/null
+sed -i "s|^PANEL_ENTRANCE=.*|PANEL_ENTRANCE='$GEN_ENTRANCE'|" "$MODDIR/settings.conf" 2>/dev/null
+
 ui_print ""
-ui_print "! 默认密码: DroidVM2026!  (dvm / root / 1Panel)"
-ui_print "! 首次启动后请立即修改: 编辑 /data/local/droidvm/settings.conf"
+ui_print "! 已为本机生成随机凭据（请抄走，重启后 VM 首次启动生效）:"
+ui_print "!   SSH/root 密码 : $GEN_DVM_PASS"
+ui_print "!   1Panel 密码   : $GEN_PANEL_PASS"
+ui_print "!   1Panel 入口   : $GEN_ENTRANCE"
+ui_print "! 首次启动后请立即修改: 编辑 /data/adb/modules/DroidVM/settings.conf"
 ui_print "! 或登录虚拟机后 passwd 修改"
 ui_print ""
 

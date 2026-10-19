@@ -59,6 +59,11 @@ build_rootfs() {
   '
   # 清理以减小体积
   rm -rf "$work"/var/lib/apt/lists/* "$work"/var/cache/apt/* "$work/usr/bin/qemu-aarch64-static"
+  # 脱敏：删除构建机安装 openssh-server 时生成的 SSH 主机密钥
+  # （分发相同主机密钥 = 所有人指纹一致，可被中间人；VM 首启由 cloud-init 的 ssh-keygen -A 重建）
+  rm -f "$work"/etc/ssh/ssh_host_*
+  # 脱敏：清理 apt/dpkg 构建日志
+  rm -rf "$work"/var/log/apt/* "$work"/var/log/dpkg.log* "$work"/var/log/alternatives.log "$work"/var/log/bootstrap.log
   for d in proc sys dev/pts dev; do umount "$work/$d" 2>/dev/null || true; done
 
   # 校验关键文件齐备（mgmt.sh 依赖）
