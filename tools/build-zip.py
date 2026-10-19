@@ -41,7 +41,7 @@ def check_assets():
 # 要打进 zip 的顶层条目
 INCLUDE = [
     "module.prop", "settings.conf", "customize.sh", "service.sh", "uninstall.sh",
-    "bin", "vm", "rootfs", "META-INF", "LICENSE", "README.md",
+    "bin", "vm", "rootfs", "META-INF", "LICENSE", "README.md", "app",
 ]
 # 排除规则（相对仓库根的路径片段）
 EXCLUDE_PREFIX = ("tools/", ".build/", ".git/", ".github/")

@@ -286,6 +286,9 @@ public class GrabActivity extends Activity {
     // ================= 青龙 API =================
 
     private String qlLogin() throws Exception {
+        if (QL_BASE.trim().isEmpty()) {
+            throw new Exception("青龙地址未配置：请在源码填写 QL_BASE 后重新构建");
+        }
         JSONObject body = new JSONObject();
         body.put("username", QL_USER);
         body.put("password", QL_PASS);

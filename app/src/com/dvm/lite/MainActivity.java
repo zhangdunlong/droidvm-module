@@ -314,6 +314,11 @@ public class MainActivity extends Activity {
 
     /** 面板入口：弹窗显示可复制的地址与账号密码，再选「内置」或「浏览器」 */
     private void openWebPanel(String title, String url, String account, String password) {
+        if (url == null || url.trim().isEmpty()) {
+            Toast.makeText(this, title + " 未配置：请在源码中填写地址后重新构建",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
         String msg = "地址：\n" + url + "\n\n账号：" + account + "\n密码：" + password;
 
         TextView tv = new TextView(this);
