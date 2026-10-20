@@ -20,6 +20,8 @@ log() { echo "[$(date '+%m-%d %H:%M:%S')] $*"; }
 die() { echo "[!] $*" >&2; exit 1; }
 
 load_settings() {
+  # 数据目录可能不存在（全新安装），必须先建——否则 cp 静默失败
+  mkdir -p "$DATADIR" "$VMDIR" 2>/dev/null
   [ -f "$SETTINGS" ] || cp "$MODDIR/settings.conf" "$SETTINGS" 2>/dev/null
   [ -f "$SETTINGS" ] || die "settings.conf 缺失"
   . "$SETTINGS"
@@ -39,13 +41,18 @@ lan_ip() {
   ip route get 1.1.1.1 2>/dev/null | sed -n 's/.*src \([0-9.]*\).*/\1/p' | head -1
 }
 
-ps_qemu() { pgrep -f 'qemu-system-aarch64' 2>/dev/null; }
+# 注意：不能用 pgrep -x ——Linux comm 截断 15 字符，"qemu-system-aarch64" 是 19 字符，
+# -x 精确匹配永远失败（真我实测 pkill -x 杀不掉进程）。
+# 用 -f 匹配命令行特征（-machine 是 QEMU 独有，不会误伤 nc/shell）
+ps_qemu() { pgrep -f 'qemu-system-aarch64 -machine' 2>/dev/null; }
 
 build_hostfwd() {
+  # netdev 选项之间必须用逗号连接（空格会被 QEMU 当成独立参数，
+  # 报 "Unknown protocol 'hostfwd=tcp'"——真我 RMX1971 实测）
   HOSTFWD=""
   for p in $VM_PORTS; do
     hp=${p%%:*}; gp=${p##*:}
-    HOSTFWD="$HOSTFWD hostfwd=tcp:0.0.0.0:$hp-:$gp"
+    HOSTFWD="$HOSTFWD,hostfwd=tcp:0.0.0.0:$hp-:$gp"
   done
 }
 
@@ -61,7 +68,16 @@ ensure_rootfs() {
     mkdir -p "$ROOTFS"
     TARBALL="$MODDIR/rootfs/ubuntu22-qemu.tar.xz"
     [ -f "$TARBALL" ] || die "rootfs 模板缺失: $TARBALL"
-    tar -xJf "$TARBALL" -C "$ROOTFS" || die "rootfs 解压失败（存储空间不足？）"
+    # 必须用带 xz applet 的 tar：系统 toybox tar 调不到 xz 二进制（真我 RMX1971 实测失败）
+    TARBIN=""
+    for BB in /data/adb/magisk/busybox /data/adb/ksu/bin/busybox /data/adb/ap/bin/busybox \
+              $(command -v busybox 2>/dev/null); do
+      [ -n "$BB" ] && [ -x "$BB" ] && TARBIN="$BB" && break
+    done
+    [ -n "$TARBIN" ] || die "未找到 busybox（xz 解压需要）"
+    "$TARBIN" tar -xJf "$TARBALL" -C "$ROOTFS" || die "rootfs 解压失败（存储空间不足？）"
+    # toybox tar 遇 xz 缺失时可能返回 0 但实际没解开——必须校验产物
+    [ -x "$ROOTFS/usr/bin/qemu-system-aarch64" ] || die "rootfs 解压不完整（qemu 二进制缺失）"
     rm -f "$ROOTFS"/etc/ssh/ssh_host_* 2>/dev/null
     chroot "$ROOTFS" /usr/sbin/ssh-keygen -A 2>/dev/null
     log "[+] rootfs 就绪"
@@ -86,7 +102,7 @@ ensure_disk() {
   elif [ ! -f "$VMDIR/dvmsrv.qcow2" ] && [ "$VM_DISK_AUTO" = "1" ]; then
     TPL="$MODDIR/vm/debian12-cloud-arm64.qcow2"
     [ -f "$TPL" ] || die "磁盘模板缺失: $TPL"
-    log "[*] 首次运行：从模板创建数据盘（325MB， cloud-init 装配约 10-20 分钟）..."
+    log "[*] 首次运行：从模板创建数据盘（325MB， cloud-init 装配 20-120 分钟（视机型））..."
     cp "$TPL" "$VMDIR/dvmsrv.qcow2" || die "数据盘创建失败（存储空间不足？）"
     log "[+] 数据盘已创建"
   fi
@@ -168,11 +184,15 @@ do_start() {
 do_stop() {
   P=$(ps_qemu)
   [ -z "$P" ] && { log "[=] 未运行"; rm -f "$PIDF"; return 0; }
-  log "[*] 停止虚拟机 PID=$P ..."
-  kill $P 2>/dev/null
+  log "[*] 停止虚拟机 PID=$(echo $P | tr '\n' ' ') ..."
+  # 必须杀全部实例：漏杀会导致双 QEMU 同时写同一 qcow2（磁盘损坏）
+  for p in $P; do kill "$p" 2>/dev/null; done
   i=0
   while [ $i -lt 20 ]; do sleep 1; [ -z "$(ps_qemu)" ] && break; i=$((i+1)); done
-  if [ -n "$(ps_qemu)" ]; then kill -9 $P 2>/dev/null; log "[!] 已强制终止"; else log "[+] 已停止"; fi
+  if [ -n "$(ps_qemu)" ]; then
+    for p in $(ps_qemu); do kill -9 "$p" 2>/dev/null; done
+    log "[!] 已强制终止"
+  else log "[+] 已停止"; fi
   rm -f "$PIDF"
 }
 

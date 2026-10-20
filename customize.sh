@@ -27,7 +27,11 @@ case "$ARCH" in
 esac
 
 # ---- 存储空间检查（rootfs+磁盘约需 1.5GB 可用） ----
-FREE_MB=$(df /data/local 2>/dev/null | awk 'NR==2 {print int($4/1024)}')
+# 三个坑（真我 RMX1971 实测）：
+# 1. 部分机型 df 设备名过长，数字列会折到下一行，不能假定 NR==2
+# 2. 折行后字段整体左移，Available 不是固定的 $4
+# 3. 表头 "Use%" 也含 %，会抢先匹配——必须匹配「数字%」取其前一列
+FREE_MB=$(df /data 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9]+%$/) {print int($(i-1)/1024); exit}}')
 [ -z "$FREE_MB" ] && FREE_MB=99999
 ui_print "- /data/local 可用空间: ${FREE_MB}MB"
 if [ "$FREE_MB" -lt 1536 ]; then
@@ -43,9 +47,15 @@ gen_pass() {
 GEN_DVM_PASS=$(gen_pass)
 GEN_PANEL_PASS=$(gen_pass)
 GEN_ENTRANCE=$(gen_pass | tr 'A-Z' 'a-z')
-sed -i "s|^DVM_PASSWORD=.*|DVM_PASSWORD='$GEN_DVM_PASS'|" "$MODDIR/settings.conf" 2>/dev/null
-sed -i "s|^PANEL_PASSWORD=.*|PANEL_PASSWORD='$GEN_PANEL_PASS'|" "$MODDIR/settings.conf" 2>/dev/null
-sed -i "s|^PANEL_ENTRANCE=.*|PANEL_ENTRANCE='$GEN_ENTRANCE'|" "$MODDIR/settings.conf" 2>/dev/null
+sed -i "s|^DVM_PASSWORD=.*|DVM_PASSWORD='$GEN_DVM_PASS'|" "$MODPATH/settings.conf" 2>/dev/null
+sed -i "s|^PANEL_PASSWORD=.*|PANEL_PASSWORD='$GEN_PANEL_PASS'|" "$MODPATH/settings.conf" 2>/dev/null
+sed -i "s|^PANEL_ENTRANCE=.*|PANEL_ENTRANCE='$GEN_ENTRANCE'|" "$MODPATH/settings.conf" 2>/dev/null
+
+# 回写校验（失败必须可见，不能静默——$MODPATH 拼错曾导致此坑）
+if grep -q "__AUTO_GENERATED__" "$MODPATH/settings.conf" 2>/dev/null; then
+  ui_print "! 警告：随机密码回写失败，请手动编辑 $MODPATH/settings.conf"
+  ui_print "!   SSH/root: $GEN_DVM_PASS  1Panel: $GEN_PANEL_PASS  入口: $GEN_ENTRANCE"
+fi
 
 ui_print ""
 ui_print "! 已为本机生成随机凭据（请抄走，重启后 VM 首次启动生效）:"
@@ -57,11 +67,11 @@ ui_print "! 或登录虚拟机后 passwd 修改"
 ui_print ""
 
 # ---- 权限 ----
-set_perm_recursive "$MODDIR" 0 0 0755 0644
-set_perm "$MODDIR/bin/mgmt.sh" 0 0 0755
-set_perm "$MODDIR/service.sh" 0 0 0755
-set_perm "$MODDIR/customize.sh" 0 0 0755
-chmod 0755 "$MODDIR/bin/mgmt.sh" 2>/dev/null
+set_perm_recursive "$MODPATH" 0 0 0755 0644
+set_perm "$MODPATH/bin/mgmt.sh" 0 0 0755
+set_perm "$MODPATH/service.sh" 0 0 0755
+set_perm "$MODPATH/customize.sh" 0 0 0755
+chmod 0755 "$MODPATH/bin/mgmt.sh" 2>/dev/null
 
 ui_print "- 安装完成"
 ui_print "- 用法: su -c 'sh /data/adb/modules/DroidVM/bin/mgmt.sh start'"

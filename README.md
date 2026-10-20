@@ -91,7 +91,9 @@ DroidVM/
 2. Magisk → 模块 → 本地安装 → 选该 zip → 重启。
    - **安装时 `customize.sh` 会为本机生成随机密码**（dvm/root/1Panel 三处），请从安装日志抄走。
 3. 重启后约 45 秒，模块自动 `start`：
-   - 首次会解压 rootfs（1–2 分钟）、从模板建数据盘、生成 cloud-init seed（装配 10–20 分钟）。
+   - 首次会解压 rootfs（1–2 分钟）、从模板建数据盘、生成 cloud-init seed。
+   - **装配时间取决于机型**：旗舰机 TCG 约 20–40 分钟；中端机（如 SD730G）实测 **1–2 小时**（apt 在纯软解下极慢）。
+   - 判断进度：`su -c 'ssh -p 2222 dvm@127.0.0.1'` 能登录且 `/var/lib/dvm-setup-finished` 出现即装配完成。
 4. 浏览器打开 **`http://<手机局域网IP>:10086/<安装日志里的随机入口>`** 即可用 1Panel。
    SSH：`ssh -p 2222 dvm@<手机局域网IP>`（密码同安装日志）
 
