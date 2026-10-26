@@ -1,5 +1,21 @@
 # DroidVM for Magisk
 
+> ## ⚠️ 这是 QEMU 软件模拟版本，已有更快的继任者
+>
+> **[droidvm-chroot](https://github.com/zhangdunlong/droidvm-chroot)** 不再使用 QEMU 指令翻译，
+> 直接把 Ubuntu rootfs 作为 chroot 跑在 Android 内核上。同一套服务，实测差异：
+>
+> | | 本项目（QEMU/TCG） | droidvm-chroot |
+> |---|---|---|
+> | 待机 CPU | ~196% | 0–5% |
+> | 机身温度 | 78.7°C | 32.5°C |
+> | 青龙首屏 | 2–8 秒 | 0.12 秒 |
+> | 首次可服务 | 20–120 分钟 | 5–10 分钟 |
+> | 磁盘 | rootfs 4.9G + qcow2 2.3G | 4.9G |
+>
+> **怎么选**：只跑自建服务 → 用 `droidvm-chroot`；
+> 需要完整虚拟机隔离、或依赖现成 Docker 镜像 → 留在本项目。
+
 把一台**完整的 Debian 12 虚拟机**（QEMU/TCG 软解）塞进任意已 Root 的安卓手机。
 开机自动启动，内置 **Docker + 1Panel**，可直接跑青龙面板、AList、Agent2API 等容器服务。
 
@@ -198,6 +214,7 @@ bash tools/build-zip.sh
 ## 已知问题 / 注意事项
 
 - 仅 TCG 软解，无硬件加速；老旧/低内存机型体验差。
+  > 这个问题在 [droidvm-chroot](https://github.com/zhangdunlong/droidvm-chroot) 中已不存在——该项目改用 chroot 原生执行，没有指令翻译开销。
 - 部分机型 SELinux 策略会拦 `mount --bind`，需 `magiskpolicy` 放行或临时 `setenforce 0` 验证。
 - 数据盘在 `/data/local/droidvm/vm/`，重刷模块**不会**删数据；卸载脚本默认只移除模块，保留数据盘（加 `-f` 才清）。
 - 本项目仅供学习研究，请遵守当地法律法规与厂商条款。

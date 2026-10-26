@@ -22,8 +22,12 @@ die() { echo "[!] $*" >&2; exit 1; }
 load_settings() {
   # 数据目录可能不存在（全新安装），必须先建——否则 cp 静默失败
   mkdir -p "$DATADIR" "$VMDIR" 2>/dev/null
-  [ -f "$SETTINGS" ] || cp "$MODDIR/settings.conf" "$SETTINGS" 2>/dev/null
+  if [ ! -f "$SETTINGS" ]; then
+    cp "$MODDIR/settings.conf" "$SETTINGS" 2>/dev/null
+  fi
   [ -f "$SETTINGS" ] || die "settings.conf 缺失"
+  # 内含明文凭据：无论新建还是旧版遗留（644），一律收紧到 600
+  chmod 600 "$SETTINGS" 2>/dev/null
   . "$SETTINGS"
   # 内存自适应: MemTotal 的 40%，钳制 1536~6144MB
   if [ "$VM_MEM" = "auto" ] || [ -z "$VM_MEM" ]; then
@@ -49,11 +53,35 @@ ps_qemu() { pgrep -f 'qemu-system-aarch64 -machine' 2>/dev/null; }
 build_hostfwd() {
   # netdev 选项之间必须用逗号连接（空格会被 QEMU 当成独立参数，
   # 报 "Unknown protocol 'hostfwd=tcp'"——真我 RMX1971 实测）
+  #
+  # 支持两种写法：
+  #   hp:gp              只写两段 -> 绑 0.0.0.0（局域网可访问）
+  #   bind:hp:gp         写三段   -> 绑指定地址，如 127.0.0.1 仅本机
+  # 例：VM_PORTS="2222:22 127.0.0.1:5700:5700"
+  #     SSH 对整个局域网开放，青龙只允许手机本机访问（配隧道/反代更安全）
   HOSTFWD=""
   for p in $VM_PORTS; do
-    hp=${p%%:*}; gp=${p##*:}
-    HOSTFWD="$HOSTFWD,hostfwd=tcp:0.0.0.0:$hp-:$gp"
+    case "$p" in
+      *:*:*)
+        bind=${p%%:*}
+        rest=${p#*:}
+        hp=${rest%%:*}; gp=${rest##*:}
+        ;;
+      *)
+        bind=0.0.0.0
+        hp=${p%%:*}; gp=${p##*:}
+        ;;
+    esac
+    HOSTFWD="$HOSTFWD,hostfwd=tcp:$bind:$hp-:$gp"
   done
+}
+
+# 从 VM_PORTS 某一项里取出宿主端口（兼容两段/三段写法）
+port_of() {
+  case "$1" in
+    *:*:*) echo "$1" | cut -d: -f2 ;;
+    *) echo "$1" | cut -d: -f1 ;;
+  esac
 }
 
 guest_ssh() {
@@ -141,7 +169,7 @@ do_start() {
   # 端口占用检查（netstat 不可用时跳过）
   if command -v netstat >/dev/null 2>&1; then
     for p in $VM_PORTS; do
-      hp=${p%%:*}
+      hp=$(port_of "$p")
       if netstat -tln 2>/dev/null | grep -q ":$hp "; then
         die "端口 $hp 已被占用，请修改 $SETTINGS 中的 VM_PORTS"
       fi

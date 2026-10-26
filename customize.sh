@@ -12,7 +12,7 @@ LATESTARTSERVICE=true
 ARCH=$(grep -E '^ro.product.cpu.abi' /system/build.prop 2>/dev/null | head -1 | cut -d= -f2)
 [ -z "$ARCH" ] && ARCH=$(getprop ro.product.cpu.abi 2>/dev/null)
 
-ui_print "- DroidVM for Magisk v1.0.0"
+ui_print "- DroidVM for Magisk v1.0.1"
 ui_print "- 在已 root 的安卓手机上运行完整 Debian 12 虚拟机"
 ui_print "- (QEMU/TCG + Docker + 1Panel)"
 
@@ -71,6 +71,8 @@ set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm "$MODPATH/bin/mgmt.sh" 0 0 0755
 set_perm "$MODPATH/service.sh" 0 0 0755
 set_perm "$MODPATH/customize.sh" 0 0 0755
+# settings.conf 含随机生成的明文凭据（SSH / 1Panel），只允许 root 读
+set_perm "$MODPATH/settings.conf" 0 0 0600
 chmod 0755 "$MODPATH/bin/mgmt.sh" 2>/dev/null
 
 ui_print "- 安装完成"
